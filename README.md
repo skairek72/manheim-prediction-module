@@ -27,6 +27,25 @@ The report shows:
 
 Importing the same PDF again replaces it; it never duplicates. The history lives in `data/real/manheim.db`.
 
+## Weekly post-sale routine
+
+1. After the sale, print the **Post-Sale Results** from postsales.manheim.com page by page as PDF
+   (any file names; downloading a page twice is fine, repeats are removed).
+2. Put them all in one folder, e.g. `data/real/manheim-pdf/` (sub-folders are fine).
+3. Run:
+
+```bash
+python -m manheim_pm.cli postsale data/real/manheim-pdf --excel data/real/market_patterns_report.xlsx
+```
+
+This replaces the old .exe. The workbook has the same tabs (Overview, Top Makes, Top Models,
+Make Model Year, Price/Mileage/Year Bands, Auction Date Trends, Model Trends, Price Trends,
+Top Models by Day, Data Sufficiency) plus:
+- **By Auction**: Skyline (SKYA, Tuesday) and New Jersey (NADE, Wednesday) kept apart
+- **All Vehicles**: every sold car on its own row
+- **Matched to Pre-Sale**: each sold car linked to its pre-sale row (lane, run, CR, MMR) by
+  make + year + exact odometer; `match_quality` is exact / close / ambiguous / none
+
 ## Post-sale analysis (sample data)
 
 ### Quick start
@@ -70,7 +89,7 @@ your own Manheim account. Scraping the site breaks its terms of use and can get 
 ## Roadmap
 
 - [x] Pre-sale PDF reader, weekly history, run-backs, lanes, snapshot changes
-- [ ] Post-sale PDF reader; match sold cars by make + year + mileage (post-sale has no VIN or lane)
+- [x] Post-sale PDF reader (folder of page PDFs), market patterns workbook, match to pre-sale
 - [ ] Buying criteria + shortlist with predicted hammer price and max bid
 - [ ] Weekly scorecard: prediction vs actual hammer; learn from misses
 

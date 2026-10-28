@@ -2,6 +2,7 @@
 
     python -m manheim_pm.cli import  <pre-sale PDFs...>    store pre-sale snapshots
     python -m manheim_pm.cli presale [--sale YYYY-MM-DD] [--excel out.xlsx]
+    python -m manheim_pm.cli postsale <folder> [--excel out.xlsx]   read a folder of post-sale PDFs
     python -m manheim_pm.cli history                        list what's stored
     python -m manheim_pm.cli analyze <sales.csv>            post-sale movers / trends / pitches
 """
@@ -15,6 +16,9 @@ from .load import load_sales
 from .movers import movers
 from .pitches import pitches
 from .presale import PresaleParseError, parse_presale
+from .match import match_sale
+from .postsale import read_folder
+from .postsale_report import build_tables, write_workbook
 from .presale_report import export_excel, text_report
 from .trends import trends
 
@@ -38,12 +42,60 @@ def cmd_import(args) -> None:
             print("  WARNING: count does not match the PDF header; check for pages missing from the PDF.")
 
 
+def cmd_postsale(args) -> None:
+    cars, infos = read_folder(args.folder)
+    bad = [i for i in infos if i.get("error")]
+    raw = sum(i["cars"] for i in infos)
+    print(f"Read {len(infos)} PDF(s): {raw:,} car rows, {raw - len(cars):,} repeat download(s) removed -> {len(cars):,} cars")
+    for i in bad:
+        print(f"  SKIPPED {i['file']}: {i['error']}")
+    for i in infos:
+        for ln in i.get("problems", []):
+            print(f"  could not read a line in {i['file']}: {ln}")
+    if cars.empty:
+        return
+    con = store.connect(args.db)
+    store.save_postsale(con, cars)
+    summary = cars.groupby(["auction", "auction_code", "sale_date"]).size().rename("cars").reset_index()
+    print(summary.to_string(index=False))
+
+    tables = build_tables(store.load_postsales(con))
+
+    # link each sale's sold cars back to its pre-sale list, where we have one
+    pre_hist = store.load_presales(con)
+    finals = store.final_lists(pre_hist) if not pre_hist.empty else pre_hist
+    linked = []
+    for (name, date), sold in cars.groupby(["auction", "sale_date"]):
+        pre = finals[(finals["auction"] == name) & (finals["sale_date"] == pd.Timestamp(date))] if len(finals) else finals
+        if len(pre) == 0:
+            continue
+        m = match_sale(sold, pre)
+        q = m["match_quality"].value_counts()
+        print(f"\n{name} {date}: matched to pre-sale {q.get('exact', 0)} exact + {q.get('close', 0)} close, "
+              f"{q.get('ambiguous', 0)} ambiguous, {q.get('none', 0)} not on the pre-sale list "
+              f"(of {len(m)} sold cars in these files)")
+        ok = m[m["match_quality"].isin(["exact", "close"])]
+        if len(ok) and ok["price_to_mmr"].notna().any():
+            print(f"  hammer vs pre-sale MMR: median {ok['price_to_mmr'].median():.0%}")
+        linked.append(m)
+    if linked:
+        tables["Matched to Pre-Sale"] = pd.concat(linked, ignore_index=True)
+
+    if args.excel:
+        write_workbook(tables, args.excel)
+        print(f"\nSaved {args.excel}")
+
+
 def cmd_history(args) -> None:
     hist = store.load_presales(store.connect(args.db))
     if hist.empty:
         print("Nothing stored yet. Run: import <pre-sale PDFs>")
         return
     print(store.snapshots(hist).to_string(index=False))
+    post = store.load_postsales(store.connect(args.db))
+    if not post.empty:
+        print("\nPost-sale results:")
+        print(post.groupby(["auction", "sale_date"]).size().rename("cars").reset_index().to_string(index=False))
 
 
 def cmd_presale(args) -> None:
@@ -84,6 +136,11 @@ def main() -> None:
     p = sub.add_parser("import", help="store pre-sale PDF snapshots")
     p.add_argument("pdfs", nargs="+")
     p.set_defaults(func=cmd_import)
+
+    p = sub.add_parser("postsale", help="read a folder of post-sale PDFs, build the market patterns workbook")
+    p.add_argument("folder", help="folder with the post-sale PDFs (e.g. manheim-pdf)")
+    p.add_argument("--excel", help="save the market patterns workbook to this .xlsx file")
+    p.set_defaults(func=cmd_postsale)
 
     p = sub.add_parser("history", help="list stored snapshots")
     p.set_defaults(func=cmd_history)

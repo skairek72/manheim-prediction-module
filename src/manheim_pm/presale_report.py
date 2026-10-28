@@ -144,7 +144,7 @@ def export_excel(history: pd.DataFrame, sale_date, path: str) -> None:
     cols = ["lane", "run", "year", "make", "model", "cr", "ev_battery_pct", "mmr", "odometer", "color",
             "engine", "fuel", "top", "vin", "not_at_auction", "times_run", "first_seen", "previous_lane",
             "mmr_change_since_first"]
-    with pd.ExcelWriter(path) as xl:
+    with pd.ExcelWriter(path, engine="openpyxl") as xl:
         flagged.sort_values(["lane", "run"])[cols].to_excel(xl, sheet_name="Run list", index=False)
         lane_profile(flagged).to_excel(xl, sheet_name="Lanes")
         ch = snapshot_changes(history, sale_date)

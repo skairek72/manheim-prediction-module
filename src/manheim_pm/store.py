@@ -20,6 +20,30 @@ def connect(db: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     return con
 
 
+def save_postsale(con: sqlite3.Connection, cars: pd.DataFrame) -> int:
+    """Store post-sale cars. Re-importing a sale replaces that sale's rows."""
+    if cars.empty:
+        return 0
+    out = cars.copy()
+    out["sale_date"] = out["sale_date"].astype(str)
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "postsale" in tables:
+        for code, date in out[["auction_code", "sale_date"]].drop_duplicates().itertuples(index=False):
+            con.execute("DELETE FROM postsale WHERE auction_code = ? AND sale_date = ?", (code, date))
+    out.to_sql("postsale", con, if_exists="append", index=False)
+    con.commit()
+    return len(out)
+
+
+def load_postsales(con: sqlite3.Connection) -> pd.DataFrame:
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "postsale" not in tables:
+        return pd.DataFrame()
+    df = pd.read_sql("SELECT * FROM postsale", con)
+    df["sale_date"] = pd.to_datetime(df["sale_date"])
+    return df
+
+
 def save_presale(con: sqlite3.Connection, df: pd.DataFrame) -> int:
     """Store one snapshot. Importing the same PDF twice replaces it instead of duplicating."""
     if df.empty:
