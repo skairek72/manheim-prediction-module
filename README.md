@@ -46,6 +46,27 @@ Top Models by Day, Data Sufficiency) plus:
 - **Matched to Pre-Sale**: each sold car linked to its pre-sale row (lane, run, CR, MMR) by
   make + year + exact odometer; `match_quality` is exact / close / ambiguous / none
 
+## Shortlist: cars to bid on
+
+1. Edit `criteria.toml` (price range, year, miles, CR, costs, recon by CR, resale estimate).
+2. Import the pre-sale for the coming sale, then:
+
+```bash
+python -m manheim_pm.cli shortlist --excel data/real/shortlist.xlsx
+```
+
+For each car that fits your rules it shows the **predicted hammer** (with a likely range), the
+**chance it sells**, and your **max bid**:
+
+    max bid = estimated resale - auction fee - transport - partner fee - estimated recon - minimum profit
+
+The prediction (v1, `predict.py`) is MMR x a ratio learned from past matched sales, adjusted for
+condition, lane, price band and mileage. It only learns from sales *before* the one being
+shortlisted, so every shortlist is a fair test once that sale's post-sale is imported.
+
+**The resale estimate in `criteria.toml` is a placeholder** (MMR + $3,500). Replace it with
+your real resale numbers; every max bid depends on it.
+
 ## Post-sale analysis (sample data)
 
 ### Quick start
@@ -90,7 +111,7 @@ your own Manheim account. Scraping the site breaks its terms of use and can get 
 
 - [x] Pre-sale PDF reader, weekly history, run-backs, lanes, snapshot changes
 - [x] Post-sale PDF reader (folder of page PDFs), market patterns workbook, match to pre-sale
-- [ ] Buying criteria + shortlist with predicted hammer price and max bid
+- [x] Buying criteria + shortlist with predicted hammer price and max bid (v1 model)
 - [ ] Weekly scorecard: prediction vs actual hammer; learn from misses
 
 ### Ideas

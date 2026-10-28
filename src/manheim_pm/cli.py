@@ -3,6 +3,7 @@
     python -m manheim_pm.cli import  <pre-sale PDFs...>    store pre-sale snapshots
     python -m manheim_pm.cli presale [--sale YYYY-MM-DD] [--excel out.xlsx]
     python -m manheim_pm.cli postsale <folder> [--excel out.xlsx]   read a folder of post-sale PDFs
+    python -m manheim_pm.cli shortlist [--sale YYYY-MM-DD] [--excel out.xlsx]   cars to bid on, with max bid
     python -m manheim_pm.cli history                        list what's stored
     python -m manheim_pm.cli analyze <sales.csv>            post-sale movers / trends / pitches
 """
@@ -20,6 +21,7 @@ from .match import match_sale, sale_outcome
 from .postsale import read_folder
 from .postsale_report import build_tables, outcome_tables, write_workbook
 from .presale_report import export_excel, text_report
+from .shortlist import SHOW, load_criteria, shortlist_for_sale
 from .trends import trends
 
 
@@ -97,6 +99,32 @@ def cmd_postsale(args) -> None:
         print(f"\nSaved {args.excel}")
 
 
+def cmd_shortlist(args) -> None:
+    con = store.connect(args.db)
+    crit = load_criteria(args.criteria)
+    hist = store.load_presales(con)
+    sale = pd.Timestamp(args.sale) if args.sale else hist["sale_date"].max()
+    sl, model, listed = shortlist_for_sale(con, sale, crit)
+    n = crit["buy"]["shortlist_size"]
+    win = sl[sl["winnable"]]
+    pd.set_option("display.width", 250)
+    pd.set_option("display.max_colwidth", 30)
+    print(f"SHORTLIST: {sl['auction'].iloc[0] if len(sl) else ''} sale of {sale:%a %m/%d/%Y}")
+    print(f"Learned from {model.n_listed:,} past listed cars ({model.n_sold:,} sold). "
+          f"Typical hammer = {model.base_ratio:.0%} of MMR; typical chance of selling {model.base_sell:.0%}.")
+    print(f"{listed:,} cars listed -> {len(sl):,} fit your rules -> {len(win):,} have a predicted hammer under your max bid.\n")
+    cols = ["rank", "lane", "run", "year", "make", "model", "cr", "odometer", "mmr", "pred_hammer",
+            "sell_chance", "max_bid", "profit_if_bought_at_pred", "notes"]
+    print(sl[cols].head(n).to_string(index=False))
+    if args.excel:
+        with pd.ExcelWriter(args.excel, engine="openpyxl") as xl:
+            sl[SHOW].head(n).to_excel(xl, sheet_name="Shortlist", index=False)
+            sl[SHOW].to_excel(xl, sheet_name="All that fit my rules", index=False)
+            pd.DataFrame([(k, str(v)) for sec in crit.values() for k, v in sec.items()],
+                         columns=["setting", "value"]).to_excel(xl, sheet_name="My criteria", index=False)
+        print(f"\nSaved {args.excel}")
+
+
 def cmd_history(args) -> None:
     hist = store.load_presales(store.connect(args.db))
     if hist.empty:
@@ -152,6 +180,12 @@ def main() -> None:
     p.add_argument("folder", help="folder with the post-sale PDFs (e.g. manheim-pdf)")
     p.add_argument("--excel", help="save the market patterns workbook to this .xlsx file")
     p.set_defaults(func=cmd_postsale)
+
+    p = sub.add_parser("shortlist", help="cars worth bidding on, with predicted hammer and max bid")
+    p.add_argument("--sale", help="sale date YYYY-MM-DD (default: latest pre-sale)")
+    p.add_argument("--criteria", default="criteria.toml", help="your buying rules (default: criteria.toml)")
+    p.add_argument("--excel", help="also save the shortlist to this .xlsx file")
+    p.set_defaults(func=cmd_shortlist)
 
     p = sub.add_parser("history", help="list stored snapshots")
     p.set_defaults(func=cmd_history)

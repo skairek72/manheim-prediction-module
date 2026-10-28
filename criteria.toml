@@ -1,0 +1,38 @@
+# Your buying rules. Edit the numbers, save, and run the shortlist again.
+
+[buy]
+min_price = 1000           # lowest hammer price I'd pay
+max_price = 15000          # highest hammer price I'd pay
+oldest_year = 2017
+max_miles = 120000
+min_cr = 3.0               # lowest condition grade
+allow_no_cr = false        # cars with no condition report
+allow_ev_hybrid = true
+avoid_makes = []           # e.g. ["NISSAN", "MINI"]
+only_makes = []            # empty = any make
+cars_per_sale = 3          # how many I usually buy
+shortlist_size = 25        # how many candidates to list (many will sell above your max or not at all)
+
+[costs]                    # per car, in dollars
+buyer_fee = 1000           # Manheim auction fee
+transport = 100
+partner_fee = 300          # paid to partner for using his auction access
+min_profit = 1000
+
+[recon]
+# Reconditioning runs $100 - $2,000. Estimated from the condition grade (better CR = less work).
+# These are starting guesses: replace them with what you actually spend.
+min = 100
+max = 2000                 # worst case, always shown next to the estimate
+by_cr = { "4.5" = 300, "4.0" = 500, "3.5" = 900, "3.0" = 1300 }   # CR at or above -> estimated recon
+
+[resale]
+# How the tool estimates what you can sell a car for. This is a placeholder until it is
+# calibrated with your real resale prices: estimated resale = MMR x markup + add.
+markup = 1.0
+add = 3500
+days_to_sell = 30
+
+[pass]
+# Pre-sale lists do not show these; the shortlist reminds you to check the CR and announcements.
+deal_breakers = ["frame damage"]
