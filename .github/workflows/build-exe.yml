@@ -39,9 +39,14 @@ jobs:
         run: |
           $result = Join-Path $env:RUNNER_TEMP "selftest.txt"
           $p = Start-Process -FilePath "dist\ManheimPrediction.exe" -ArgumentList "--selftest", "`"$result`"" -Wait -PassThru
-          if (Test-Path $result) { Get-Content $result } else { Write-Output "no result file" }
-          if ($p.ExitCode -ne 0 -or -not (Test-Path $result) -or (Get-Content $result -Raw).Trim() -ne "OK") {
-            Write-Error "Self-test failed (exit code $($p.ExitCode))"; exit 1
+          $text = if (Test-Path $result) { (Get-Content $result -Raw) } else { "no result file written" }
+          Write-Output $text
+          if ($p.ExitCode -ne 0 -or $text.Trim() -ne "OK") {
+            # one annotation with the whole traceback, readable from the run summary / API
+            $msg = ("exit code $($p.ExitCode): " + $text) -replace "%", "%25" -replace "`r", "" -replace "`n", "%0A"
+            if ($msg.Length -gt 3500) { $msg = $msg.Substring($msg.Length - 3500) }
+            Write-Output "::error title=Self-test failed::$msg"
+            exit 1
           }
 
       - uses: actions/upload-artifact@v4
