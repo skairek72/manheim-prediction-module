@@ -70,3 +70,24 @@ def test_match_by_make_year_odometer():
     assert list(m["match_quality"]) == ["exact", "close", "close", "none"]
     assert list(m["pre_vin"][:3]) == ["V1", "V2", "V3"]
     assert m["price_to_mmr"].iloc[0] == round(6200 / 6625, 3)
+
+
+def test_cut_off_makes_are_expanded():
+    from manheim_pm.postsale import full_make
+    assert full_make("MERCEDES-B") == "MERCEDES-BENZ"
+    assert full_make("MERCEDES B") == "MERCEDES-BENZ"
+    assert full_make("FORD") == "FORD" and full_make("LAND ROVER") == "LAND ROVER"
+
+
+def test_outcome_sold_ran_again_gone():
+    from manheim_pm.postsale_report import outcome_tables
+    o = pd.DataFrame({
+        "sale_date": "2026-10-20", "lane": [1, 1, 2], "run": [1, 2, 3], "year": 2020, "make": "FORD",
+        "model": "X", "cr": [3.5, None, 4.2], "mmr": [10000, 5000, 20000], "odometer": [1, 2, 3],
+        "vin": ["A", "B", "C"], "price": [9000, None, None], "match_quality": ["exact", None, None],
+        "sold": [True, False, False],
+    })
+    t = outcome_tables(o, next_list_vins={"B"})
+    assert list(t["Every Pre-Sale Car"]["fate"]) == ["sold", "ran again", "gone"]
+    lane1 = t["Outcome by Lane"].set_index("lane").loc[1]
+    assert (lane1["Sold_%"], lane1["Ran_Again_%"], lane1["Median_Hammer_vs_MMR_%"]) == (50, 50, 90)

@@ -89,3 +89,43 @@ def write_workbook(tables: dict[str, pd.DataFrame], path: str) -> None:
                 width = max(len(str(v.value)) if v.value is not None else 0 for v in col[:200])
                 ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 8), 45)
             ws.freeze_panes = "A2"
+
+
+def outcome_tables(outcome: pd.DataFrame, next_list_vins: set | None = None) -> dict[str, pd.DataFrame]:
+    """What happened to every car on a pre-sale list: sold, ran again next sale, or gone.
+
+    outcome comes from match.sale_outcome. "gone" means neither in the sold files nor
+    on the next list: withdrawn, sold privately after the sale, or a post-sale page
+    that was not downloaded.
+    """
+    o = outcome.copy()
+    nxt = next_list_vins or set()
+    o["fate"] = "gone"
+    o.loc[o["vin"].isin(nxt), "fate"] = "ran again"
+    o.loc[o["sold"], "fate"] = "sold"
+    o["hammer_vs_mmr"] = (o["price"] / o["mmr"]).round(3)
+    o["CR_Band"] = pd.cut(o["cr"], [0, 2, 3, 4, 5.1], labels=["<2.0", "2.0-2.9", "3.0-3.9", "4.0+"],
+                          right=False).cat.add_categories("no CR").fillna("no CR")
+    o["MMR_Band"] = pd.cut(o["mmr"], [0, 3000, 7500, 15000, 30000, float("inf")],
+                           labels=["<$3k", "$3k-$7.5k", "$7.5k-$15k", "$15k-$30k", "$30k+"])
+
+    def summary(by):
+        g = o.groupby(by, observed=True)
+        t = pd.DataFrame({
+            "Cars": g.size(),
+            "Sold_%": (g["sold"].mean() * 100).round(0),
+            "Ran_Again_%": (g["fate"].apply(lambda s: (s == "ran again").mean()) * 100).round(0),
+            "Gone_%": (g["fate"].apply(lambda s: (s == "gone").mean()) * 100).round(0),
+            "Median_Hammer_vs_MMR_%": (g["hammer_vs_mmr"].median() * 100).round(0),
+        })
+        return t.reset_index()
+
+    cols = ["sale_date", "lane", "run", "year", "make", "model", "cr", "mmr", "odometer", "vin",
+            "fate", "price", "hammer_vs_mmr", "match_quality"]
+    return {
+        "Outcome by Lane": summary("lane"),
+        "Outcome by CR": summary("CR_Band"),
+        "Outcome by MMR": summary("MMR_Band"),
+        "Outcome by Make": summary("make").sort_values("Cars", ascending=False),
+        "Every Pre-Sale Car": o[cols].sort_values(["lane", "run"]),
+    }

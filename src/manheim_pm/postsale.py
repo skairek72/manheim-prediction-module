@@ -23,6 +23,22 @@ AUCTION_LINE = re.compile(r"Post-Sale Results / (.+)$")
 URL_PAGE = re.compile(r"[?&]page=(\d+)")
 URL_MAKE = re.compile(r"[?&]make=([A-Z%0-9 +-]+?)(?:&|…|$)")
 
+# The make column is narrow, so long makes are cut off ("MERCEDES-B", "MERCEDES B").
+FULL_MAKES = ["ALFA ROMEO", "ASTON MARTIN", "LAND ROVER", "MERCEDES-BENZ", "MITSUBISHI", "ROLLS-ROYCE",
+              "VOLKSWAGEN", "CHEVROLET", "CHRYSLER", "LAMBORGHINI", "MASERATI", "OLDSMOBILE", "PONTIAC",
+              "FREIGHTLINER", "INTERNATIONAL", "LINCOLN", "CADILLAC", "INFINITI", "GENESIS", "HYUNDAI",
+              "PORSCHE", "SUBARU", "SUZUKI", "MERCURY", "POLESTAR", "HUMMER"]
+
+
+def full_make(make: str | None) -> str | None:
+    """Expand a cut-off make to its full name when exactly one known make starts with it."""
+    if not make:
+        return make
+    norm = lambda s: s.replace("-", " ")
+    hits = [m for m in FULL_MAKES if norm(m).startswith(norm(make))]
+    return hits[0] if len(hits) == 1 and make not in FULL_MAKES else make
+
+
 COLUMNS = ["auction", "auction_code", "sale_date", "year", "make", "model", "subseries", "color",
            "doors", "cyl", "fuel", "trans", "drive", "radio", "interior", "odometer", "price",
            "source_file", "source_page"]
@@ -97,7 +113,7 @@ def parse_postsale(path: str | Path) -> tuple[pd.DataFrame, dict]:
                     info["problems"].append(text)
                     continue
                 rows.append({
-                    "year": int(c["Year"]), "make": c["Make"], "model": c["Model"],
+                    "year": int(c["Year"]), "make": full_make(c["Make"]), "model": c["Model"],
                     "subseries": c["Subseries"], "color": c["Color"],
                     "doors": int(c["Drs"]) if c["Drs"] and c["Drs"].isdigit() else None,
                     "cyl": c["Cyl"], "fuel": c["Fuel"], "trans": c["Trans"], "drive": c["4x4"],

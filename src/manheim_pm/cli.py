@@ -16,9 +16,9 @@ from .load import load_sales
 from .movers import movers
 from .pitches import pitches
 from .presale import PresaleParseError, parse_presale
-from .match import match_sale
+from .match import match_sale, sale_outcome
 from .postsale import read_folder
-from .postsale_report import build_tables, write_workbook
+from .postsale_report import build_tables, outcome_tables, write_workbook
 from .presale_report import export_excel, text_report
 from .trends import trends
 
@@ -78,6 +78,17 @@ def cmd_postsale(args) -> None:
         if len(ok) and ok["price_to_mmr"].notna().any():
             print(f"  hammer vs pre-sale MMR: median {ok['price_to_mmr'].median():.0%}")
         linked.append(m)
+
+        later = finals[(finals["auction"] == name) & (finals["sale_date"] > pd.Timestamp(date))]
+        nxt = set(later[later["sale_date"] == later["sale_date"].min()]["vin"]) if len(later) else set()
+        out = outcome_tables(sale_outcome(pre, m), nxt)
+        lanes = out["Outcome by Lane"]
+        fates = out["Every Pre-Sale Car"]["fate"].value_counts()
+        print(f"  of {len(pre):,} cars on the pre-sale list: {fates.get('sold', 0):,} sold, "
+              f"{fates.get('ran again', 0):,} ran again next sale, {fates.get('gone', 0):,} gone"
+              + ("" if nxt else " (next sale's pre-sale not imported yet, so 'gone' includes run-backs)"))
+        for tab, df in out.items():
+            tables[tab] = pd.concat([tables[tab], df.assign(sale=str(date))]) if tab in tables else df.assign(sale=str(date))
     if linked:
         tables["Matched to Pre-Sale"] = pd.concat(linked, ignore_index=True)
 
