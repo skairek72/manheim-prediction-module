@@ -139,16 +139,19 @@ def read_folder(folder: str | Path) -> tuple[pd.DataFrame, list[dict]]:
     frames, infos = [], []
     for pdf in sorted(Path(folder).rglob("*.pdf"), key=lambda p: p.name.lower()):
         try:
-            df, info = parse_postsale(pdf)
+            df, info = parse_compact(pdf) if is_compact(pdf) else parse_postsale(pdf)
         except Exception as e:  # one bad file should not stop the folder
             infos.append({"file": pdf.name, "error": str(e), "cars": 0, "problems": []})
             continue
         frames.append(df)
         infos.append(info)
     if not frames:
-        return pd.DataFrame(columns=COLUMNS), infos
+        return pd.DataFrame(columns=COLUMNS + ["partial"]), infos
 
-    return drop_repeat_downloads(pd.concat(frames, ignore_index=True)), infos
+    cars = drop_repeat_downloads(pd.concat(frames, ignore_index=True))
+    partial = {(i["auction_code"], i["sale_date"]) for i in infos if i.get("partial")}
+    cars["partial"] = [(a, d) in partial for a, d in zip(cars["auction_code"], cars["sale_date"])]
+    return cars, infos
 
 
 def drop_repeat_downloads(cars: pd.DataFrame) -> pd.DataFrame:
@@ -159,3 +162,73 @@ def drop_repeat_downloads(cars: pd.DataFrame) -> pd.DataFrame:
     # keep, for each identical car, as many copies as the file that has the most of them
     keep = filled.assign(copy=copy).drop_duplicates(key + ["copy"]).index
     return cars.loc[keep].reset_index(drop=True)
+
+
+# --- Compact summary format -------------------------------------------------------------
+# A single multi-page PDF titled "<auction>: Post-Sale Results, MM/DD/YYYY" with columns
+# Year | Make | Model | Trim | Drive | Miles | Sold Price, mileage rounded to 100 mi and
+# price to $50. It may say which makes are missing ("Not included: ...").
+
+COMPACT_TITLE = re.compile(r"^(Manheim .+?): Post-Sale Results, (\d\d/\d\d/\d{4})")
+COMPACT_HEADINGS = ["Year", "Make", "Model", "Trim", "Drive", "Miles"]
+AUCTION_CODES = {"Manheim NY Metro Skyline": "SKYA", "Manheim New Jersey": "NADE"}
+
+
+def is_compact(path: str | Path) -> bool:
+    with pdfplumber.open(path) as pdf:
+        first = (pdf.pages[0].extract_text() or "").splitlines()[:2]
+    return any(COMPACT_TITLE.match(ln.strip()) for ln in first)
+
+
+def parse_compact(path: str | Path) -> tuple[pd.DataFrame, dict]:
+    path = Path(path)
+    info = {"file": path.name, "auction": None, "auction_code": None, "sale_date": None, "page": None,
+            "make_filter": None, "problems": [], "partial": False, "missing_makes": [], "odometer_rounding": 100}
+    rows, bounds = [], None
+    with pdfplumber.open(path) as pdf:
+        intro = " ".join((pdf.pages[0].extract_text() or "").split("Summary by make")[0].split())
+        for pno, page in enumerate(pdf.pages, 1):
+            for words in _lines(page):
+                text = " ".join(w["text"] for w in words)
+                if m := COMPACT_TITLE.match(text):
+                    info["auction"] = m.group(1)
+                    info["auction_code"] = AUCTION_CODES.get(m.group(1), m.group(1)[:5].upper())
+                    info["sale_date"] = datetime.strptime(m.group(2), "%m/%d/%Y").date()
+                if words[0]["text"] == "Year" and any(w["text"] == "Miles" for w in words):
+                    xs = {w["text"]: w["x0"] for w in words}
+                    bounds = [(h, xs[h] - 6) for h in COMPACT_HEADINGS if h in xs]
+                    continue
+                if bounds is None or not re.fullmatch(r"(19|20)\d\d", words[0]["text"]):
+                    continue
+                price = next((w["text"] for w in reversed(words) if w["text"].startswith("$")), None)
+                body = [w for w in words if not w["text"].startswith("$")]
+                miles = body.pop()["text"] if body and re.fullmatch(r"[\d,]+", body[-1]["text"]) else None
+                cells = {h: [] for h, _ in bounds}
+                for w in body:
+                    col = bounds[0][0]
+                    for h, start in bounds:
+                        if w["x0"] >= start and h != "Miles":
+                            col = h
+                    cells[col].append(w["text"])
+                c = {h: " ".join(v) or None for h, v in cells.items()}
+                try:
+                    rows.append({
+                        "year": int(c["Year"]), "make": full_make(c["Make"]), "model": c["Model"],
+                        "subseries": c["Trim"], "drive": c["Drive"],
+                        "odometer": int(miles.replace(",", "")) if miles else None,
+                        "price": int(price.lstrip("$").replace(",", "")),
+                        "source_file": path.name, "source_page": pno,
+                    })
+                except (AttributeError, TypeError, ValueError):
+                    info["problems"].append(text)
+    if info["sale_date"] is None:
+        raise ValueError(f"{path.name}: not a compact post-sale summary")
+    if m := re.search(r"Not included: (.+?), about \d+ cars", intro):
+        info["missing_makes"] = [s.strip().upper() for s in re.split(r",| and ", m.group(1)) if s.strip()]
+        info["partial"] = True
+    if re.search(r"partway|blocked|partial", intro, re.I):
+        info["partial"] = True
+    df = pd.DataFrame(rows, columns=COLUMNS)
+    df["auction"], df["auction_code"], df["sale_date"] = info["auction"], info["auction_code"], info["sale_date"]
+    info["cars"] = len(df)
+    return df, info

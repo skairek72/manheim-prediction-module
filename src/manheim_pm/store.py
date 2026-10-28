@@ -28,6 +28,9 @@ def save_postsale(con: sqlite3.Connection, cars: pd.DataFrame) -> int:
     out["sale_date"] = out["sale_date"].astype(str)
     tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     if "postsale" in tables:
+        have = {r[1] for r in con.execute("PRAGMA table_info(postsale)")}
+        for col in out.columns.difference(list(have)):
+            con.execute(f'ALTER TABLE postsale ADD COLUMN "{col}"')
         for code, date in out[["auction_code", "sale_date"]].drop_duplicates().itertuples(index=False):
             con.execute("DELETE FROM postsale WHERE auction_code = ? AND sale_date = ?", (code, date))
     out.to_sql("postsale", con, if_exists="append", index=False)
@@ -41,6 +44,7 @@ def load_postsales(con: sqlite3.Connection) -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.read_sql("SELECT * FROM postsale", con)
     df["sale_date"] = pd.to_datetime(df["sale_date"])
+    df["partial"] = df["partial"].fillna(0).astype(bool) if "partial" in df else False
     return df
 
 

@@ -54,3 +54,11 @@ def test_rules_and_max_bid():
     resale = 8000 * CRIT["resale"]["markup"] + CRIT["resale"]["add"]
     assert r["max_bid"] == round(resale - c["buyer_fee"] - c["transport"] - c["partner_fee"] - 500 - c["min_profit"], -1)
     assert r["max_bid_worst_recon"] < r["max_bid"]
+
+
+def test_run_backs_learned_cheaper():
+    h = history()
+    h["times_run"] = [1 + (i % 2) for i in range(len(h))]
+    h.loc[h["times_run"] == 2, "price"] *= 0.8
+    m = Model().fit(h)
+    assert m.ratio_adj["run_back"]["run-back"] < m.ratio_adj["run_back"]["first time"]

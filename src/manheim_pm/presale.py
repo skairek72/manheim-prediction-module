@@ -103,6 +103,8 @@ def parse_lines(lines: list[str]) -> tuple[pd.DataFrame, dict]:
             info["snapshot_at"] = datetime.strptime(f"{m.group(1)} {m.group(2)}", "%m/%d/%y %I:%M %p")
         if m := AUCTION.match(ln):
             info["auction"] = m.group(1)
+        elif info["auction"] is None and ln.startswith("Manheim ") and " - " not in ln:
+            info["auction"] = ln  # narrow print: the auction name sits on its own line
     if info["sale_date"] is None:
         raise PresaleParseError("no 'MM/DD/YYYY - (N Vehicles)' header; is this a pre-sale list PDF?")
 

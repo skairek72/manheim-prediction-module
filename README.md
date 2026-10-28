@@ -67,6 +67,22 @@ shortlisted, so every shortlist is a fair test once that sale's post-sale is imp
 **The resale estimate in `criteria.toml` is a placeholder** (MMR + $3,500). Replace it with
 your real resale numbers; every max bid depends on it.
 
+## Weekly scorecard
+
+Once a sale's post-sale is imported, score the predictions that were made before it:
+
+```bash
+python -m manheim_pm.cli scorecard --sale 2026-10-27 --excel data/real/scorecard.xlsx
+```
+
+It shows the median error of the predicted hammer vs plain MMR (overall and in your buy box),
+how often the actual price fell inside the predicted range, how the shortlist did, and whether
+adding lane / price band / mileage would have helped that week. Factors are only added to the
+model when they keep helping.
+
+Post-sales in the compact one-file format (rounded mileage, "Not included: ..." makes) are read
+too and marked **partial**: their prices are learned, their sell / no-sell is not.
+
 ## Post-sale analysis (sample data)
 
 ### Quick start

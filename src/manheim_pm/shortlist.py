@@ -29,11 +29,19 @@ def training_outcomes(con) -> pd.DataFrame:
     if pre_hist.empty or post.empty:
         return pd.DataFrame()
     finals = store.final_lists(pre_hist)
+    first_sale = finals.groupby("auction")["sale_date"].min()
     out = []
     for (name, date), sold in post.groupby(["auction", "sale_date"]):
         pre = finals[(finals["auction"] == name) & (finals["sale_date"] == date)]
         if len(pre):
-            out.append(sale_outcome(pre, match_sale(sold, pre)))
+            # run-back status is only known once an earlier sale of this auction is stored
+            pre = flag_history(pre_hist[pre_hist["auction"] == name], date)
+            if date == first_sale.get(name):
+                pre["times_run"] = pd.NA
+            o = sale_outcome(pre, match_sale(sold, pre))
+            # a partial post-sale tells us prices, not which cars failed to sell
+            o["sell_known"] = not bool(sold["partial"].any()) if "partial" in sold else True
+            out.append(o)
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
 
 

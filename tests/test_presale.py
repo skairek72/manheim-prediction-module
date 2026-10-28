@@ -84,3 +84,11 @@ def test_run_backs_and_snapshot_changes(tmp_path):
     assert set(ch["added"]["vin"]) == {"5YJAAAAAAAA000004", "1C4AAAAAAAA000006"}
     assert set(ch["withdrawn"]["vin"]) == {"2HNAAAAAAAA000003"}
     assert ch["mmr_moved"] == 1
+
+
+def test_auction_name_on_its_own_line():
+    lines = page("11/03/2026", "10/28/26, 2:45 PM", [CAMRY])
+    lines[2] = "Switch to Pre-Sale Detail View"
+    lines.insert(3, "Manheim Test Auction")
+    _, info = parse_lines(lines)
+    assert info["auction"] == "Manheim Test Auction"

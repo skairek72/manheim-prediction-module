@@ -4,6 +4,7 @@
     python -m manheim_pm.cli presale [--sale YYYY-MM-DD] [--excel out.xlsx]
     python -m manheim_pm.cli postsale <folder> [--excel out.xlsx]   read a folder of post-sale PDFs
     python -m manheim_pm.cli shortlist [--sale YYYY-MM-DD] [--excel out.xlsx]   cars to bid on, with max bid
+    python -m manheim_pm.cli scorecard --sale YYYY-MM-DD [--excel out.xlsx]   how good were the predictions
     python -m manheim_pm.cli history                        list what's stored
     python -m manheim_pm.cli analyze <sales.csv>            post-sale movers / trends / pitches
 """
@@ -22,6 +23,7 @@ from .postsale import read_folder
 from .postsale_report import build_tables, outcome_tables, write_workbook
 from .presale_report import export_excel, text_report
 from .shortlist import SHOW, load_criteria, shortlist_for_sale
+from .scorecard import scorecard
 from .trends import trends
 
 
@@ -125,6 +127,33 @@ def cmd_shortlist(args) -> None:
         print(f"\nSaved {args.excel}")
 
 
+def cmd_scorecard(args) -> None:
+    con = store.connect(args.db)
+    sc = scorecard(con, args.sale, load_criteria(args.criteria))
+    pd.set_option("display.width", 220)
+    print(f"SCORECARD: sale of {sc['sale_date']:%m/%d/%Y}, model trained on {', '.join(map(str, sc['trained_on']))}")
+    if sc["partial"]:
+        print("(partial post-sale: prices are scored; sell/no-sell is not)")
+    print("\nHow close was the predicted hammer? (median error, lower is better)")
+    print(sc["accuracy"].to_string(index=False))
+    print(f"\nActual hammer inside the predicted range: {sc['inside_range']:.0%} (aim ~50%). "
+          f"Actual vs predicted, median: {sc['bias']:.3f} (1.000 = no bias)")
+    print("\nWould other factors have helped this week?")
+    print(sc["factor_trials"].to_string(index=False))
+    sl = sc["shortlist"]
+    print(f"\nShortlist: {int(sl['sold'].fillna(False).sum())} of {len(sl)} found sold; "
+          f"{int(sl['under_max_bid'].sum())} sold at or under your max bid.")
+    print(sl[["rank", "lane", "run", "year", "make", "model", "cr", "pred_hammer", "price",
+              "actual_vs_pred", "max_bid"]].to_string(index=False))
+    if args.excel:
+        with pd.ExcelWriter(args.excel, engine="openpyxl") as xl:
+            sc["accuracy"].to_excel(xl, sheet_name="Accuracy", index=False)
+            sc["factor_trials"].to_excel(xl, sheet_name="Factor tests", index=False)
+            sl.to_excel(xl, sheet_name="Shortlist results", index=False)
+            sc["per_car"].sort_values("error", ascending=False).to_excel(xl, sheet_name="Every car", index=False)
+        print(f"\nSaved {args.excel}")
+
+
 def cmd_history(args) -> None:
     hist = store.load_presales(store.connect(args.db))
     if hist.empty:
@@ -186,6 +215,12 @@ def main() -> None:
     p.add_argument("--criteria", default="criteria.toml", help="your buying rules (default: criteria.toml)")
     p.add_argument("--excel", help="also save the shortlist to this .xlsx file")
     p.set_defaults(func=cmd_shortlist)
+
+    p = sub.add_parser("scorecard", help="score a sale's predictions once its post-sale is imported")
+    p.add_argument("--sale", required=True, help="sale date YYYY-MM-DD")
+    p.add_argument("--criteria", default="criteria.toml")
+    p.add_argument("--excel", help="also save the scorecard to this .xlsx file")
+    p.set_defaults(func=cmd_scorecard)
 
     p = sub.add_parser("history", help="list stored snapshots")
     p.set_defaults(func=cmd_history)

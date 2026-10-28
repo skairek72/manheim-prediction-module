@@ -23,12 +23,22 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     d["miles_band"] = pd.cut(d["odometer"], [-1, 30000, 60000, 90000, 120000, 150000, float("inf")],
                              labels=["<30k", "30-60k", "60-90k", "90-120k", "120-150k", "150k+"]).astype(str)
     d["lane_s"] = d["lane"].astype("Int64").astype(str)
+    if "times_run" in d:
+        tr = pd.to_numeric(d["times_run"], errors="coerce")
+        d["run_back"] = tr.map(lambda t: "unknown" if pd.isna(t) else "first time" if t <= 1 else "run-back")
+    else:
+        d["run_back"] = "unknown"
     return d
 
 
 class Model:
-    PRICE_FEATURES = ["cr_band", "lane_s", "mmr_band", "miles_band"]
-    SELL_FEATURES = ["cr_band", "lane_s", "mmr_band"]
+    # Condition only for now: tested on the 10/27 sale (trained on 10/20), adding lane, price band
+    # or mileage made predictions worse. Re-test with the weekly scorecard as weeks accumulate.
+    # Run-back added 10/28: on 10/27 run-backs sold at 81% of MMR vs 98% for first-time cars,
+    # and sold half as often. First scored on the 11/03 sale.
+    PRICE_FEATURES = ["cr_band", "run_back"]
+    CANDIDATE_FEATURES = ["lane_s", "mmr_band", "miles_band"]
+    SELL_FEATURES = ["cr_band", "lane_s", "mmr_band", "run_back"]
 
     def fit(self, outcome: pd.DataFrame) -> "Model":
         """outcome: pre-sale rows with sold (bool) and price (hammer, NaN if unsold)."""
@@ -37,7 +47,9 @@ class Model:
         sold["ratio"] = (sold["price"] / sold["mmr"]).clip(0.1, 2.0)
         self.n_sold, self.n_listed = len(sold), len(d)
         self.base_ratio = float(sold["ratio"].median())
-        self.base_sell = float(d["sold"].mean())
+        known = d[d["sell_known"].fillna(True).astype(bool)] if "sell_known" in d else d
+        self.n_listed = len(known)
+        self.base_sell = float(known["sold"].mean())
         # Fit each factor on what the others leave unexplained (backfitting), so overlapping
         # factors (rough cars cluster in lane 98) are not counted twice.
         self.ratio_adj = {f: {} for f in self.PRICE_FEATURES}
@@ -46,7 +58,7 @@ class Model:
                 others = self._ratio(sold, skip=f)
                 resid = sold.assign(r=sold["ratio"] / others)
                 self.ratio_adj[f] = self._shrunk(resid, f, "r", 1.0, np.median)
-        self.sell_adj = {f: self._shrunk(d.assign(s=d["sold"].astype(float)), f, "s", self.base_sell, np.mean)
+        self.sell_adj = {f: self._shrunk(known.assign(s=known["sold"].astype(float)), f, "s", self.base_sell, np.mean)
                          for f in self.SELL_FEATURES}
         # spread of actual vs predicted, for the likely range
         resid = sold["ratio"] / self._ratio(sold)
