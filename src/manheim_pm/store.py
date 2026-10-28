@@ -9,9 +9,19 @@ from .presale import COLUMNS
 DEFAULT_DB = Path("data/real/manheim.db")
 
 
+_OPEN: list[sqlite3.Connection] = []
+
+
+def close_all() -> None:
+    """Close every connection opened by connect(); on Windows an open file stays locked."""
+    while _OPEN:
+        _OPEN.pop().close()
+
+
 def connect(db: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     Path(db).parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(db)
+    _OPEN.append(con)
     con.execute(f"""
         CREATE TABLE IF NOT EXISTS presale (
             {", ".join(COLUMNS)},

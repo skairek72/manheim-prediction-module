@@ -241,7 +241,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    args.func(args)
+    try:
+        args.func(args)
+    finally:
+        store.close_all()
 
 
 def main() -> None:
