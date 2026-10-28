@@ -196,7 +196,7 @@ def cmd_analyze(args) -> None:
     print("\n\n".join(pitches(mv, tr)))
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description="Manheim auction analysis")
     ap.add_argument("--db", default=store.DEFAULT_DB, help="history database (default: data/real/manheim.db)")
     sub = ap.add_subparsers(dest="command", required=True)
@@ -236,8 +236,16 @@ def main() -> None:
     p.add_argument("--window", type=int, default=28, help="trend window in days")
     p.set_defaults(func=cmd_analyze)
 
-    args = ap.parse_args()
+    return ap
+
+
+def run(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
     args.func(args)
+
+
+def main() -> None:
+    run()
 
 
 if __name__ == "__main__":

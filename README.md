@@ -6,6 +6,17 @@ Analyzes wholesale auction results to answer three questions:
 2. **What's trending?** The last 4 weeks vs the 4 before them (`trends.py`)
 3. **What do I say?** Short sales pitches built only from those numbers (`pitches.py`)
 
+## Windows app (no typing commands)
+
+Download **ManheimPrediction.exe** from the repo's **Releases → latest** and double-click it.
+GitHub builds it automatically on every change to `main` (`.github/workflows/build-exe.yml`).
+
+Buttons: 1 Import pre-sale PDFs · 2 Pre-sale report · 3 Make shortlist · 4 Import post-sale folder ·
+5 Scorecard · Open reports folder · Edit my criteria.
+
+Your data lives in `Documents\Manheim Prediction` (history database, `criteria.toml`, `reports\`), so
+replacing the .exe with a newer one keeps everything.
+
 ## Weekly pre-sale routine (Manheim NY Metro Skyline)
 
 1. Download the **Pre-Sale Inventory** list as PDF (one or more snapshots before the sale).
