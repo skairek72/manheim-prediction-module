@@ -6,12 +6,35 @@ Analyzes wholesale auction results to answer three questions:
 2. **What's trending?** The last 4 weeks vs the 4 before them (`trends.py`)
 3. **What do I say?** Short sales pitches built only from those numbers (`pitches.py`)
 
-## Quick start
+## Weekly pre-sale routine (Manheim NY Metro Skyline)
+
+1. Download the **Pre-Sale Inventory** list as PDF (one or more snapshots before the sale).
+2. Put the PDFs in `data/real/presale/` (private, never uploaded to GitHub).
+3. Import and report:
+
+```bash
+python -m manheim_pm.cli import data/real/presale/*.pdf
+python -m manheim_pm.cli presale --excel data/real/presale_report.xlsx
+python -m manheim_pm.cli history
+```
+
+The report shows:
+- **What's offered:** count, median MMR / miles / year, top makes, cars missing a CR or not yet on the lot
+- **Last sale:** how many cars from the previous sale are back on this list (= did not sell)
+- **Run-backs:** cars listed before, how many times, and how their MMR moved
+- **Lanes:** size, typical car, and run-back share per lane (low = cars in that lane sell)
+- **Changes between snapshots:** late additions, withdrawals, MMR moves
+
+Importing the same PDF again replaces it; it never duplicates. The history lives in `data/real/manheim.db`.
+
+## Post-sale analysis (sample data)
+
+### Quick start
 
 ```bash
 pip install -e ".[dev]"
 python scripts/make_sample_data.py          # FAKE data for development
-python -m manheim_pm.cli data/sample_sales.csv
+python -m manheim_pm.cli analyze data/sample_sales.csv
 pytest
 ```
 
@@ -44,7 +67,14 @@ Put real exports in `data/real/`. That folder is git-ignored so your data stays 
 Manheim data (MMR, sale results, Manheim Market Index) is licensed. Use the exports and API access that come with
 your own Manheim account. Scraping the site breaks its terms of use and can get the account suspended.
 
-## Roadmap ideas
+## Roadmap
+
+- [x] Pre-sale PDF reader, weekly history, run-backs, lanes, snapshot changes
+- [ ] Post-sale PDF reader; match sold cars by make + year + mileage (post-sale has no VIN or lane)
+- [ ] Buying criteria + shortlist with predicted hammer price and max bid
+- [ ] Weekly scorecard: prediction vs actual hammer; learn from misses
+
+### Ideas
 
 - Break down by region and by mileage/condition band (where a car moves, not just whether it does)
 - Price-forecast model (next 4 weeks) once there are a few months of real history
