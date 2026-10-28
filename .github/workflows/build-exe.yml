@@ -21,7 +21,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install . pytest pyinstaller==6.11.1
+          pip install . pytest "pyinstaller>=6.16" "pyinstaller-hooks-contrib>=2025.8"
 
       - name: Test
         run: python -m pytest -q
@@ -31,11 +31,18 @@ jobs:
           pyinstaller --onefile --windowed --name ManheimPrediction
           --paths src --add-data "criteria.toml;."
           --collect-all pdfplumber --collect-all pdfminer
+          --collect-all numpy --collect-submodules pandas --collect-data pandas
           app_main.py
 
-      - name: Smoke test the .exe imports
-        shell: bash
-        run: ls -la dist/ && test -s dist/ManheimPrediction.exe
+      - name: Self-test the finished .exe (it must really start)
+        shell: pwsh
+        run: |
+          $result = Join-Path $env:RUNNER_TEMP "selftest.txt"
+          $p = Start-Process -FilePath "dist\ManheimPrediction.exe" -ArgumentList "--selftest", "`"$result`"" -Wait -PassThru
+          if (Test-Path $result) { Get-Content $result } else { Write-Output "no result file" }
+          if ($p.ExitCode -ne 0 -or -not (Test-Path $result) -or (Get-Content $result -Raw).Trim() -ne "OK") {
+            Write-Error "Self-test failed (exit code $($p.ExitCode))"; exit 1
+          }
 
       - uses: actions/upload-artifact@v4
         with:
