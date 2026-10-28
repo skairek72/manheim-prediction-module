@@ -30,3 +30,11 @@ def test_database_file_is_released_after_each_command(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     app.run_captured(["--db", str(tmp_path / "t.db"), "history"])
     assert store._OPEN == []
+
+
+def test_postsale_workbook_button_without_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    labels = dict(app.actions(lambda kind: None))
+    argv = labels["Post-sale workbook"]()
+    assert "postsale-report" in argv
+    assert "No post-sales stored yet" in app.run_captured(argv)

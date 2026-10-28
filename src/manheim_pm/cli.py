@@ -62,7 +62,22 @@ def cmd_postsale(args) -> None:
     store.save_postsale(con, cars)
     summary = cars.groupby(["auction", "auction_code", "sale_date"]).size().rename("cars").reset_index()
     print(summary.to_string(index=False))
+    write_postsale_workbook(con, cars, args.excel)
 
+
+def cmd_postsale_report(args) -> None:
+    """Rebuild the market patterns workbook from every stored post-sale, without re-importing."""
+    con = store.connect(args.db)
+    post = store.load_postsales(con)
+    if post.empty:
+        print("No post-sales stored yet. Use 'Import POST-SALE folder' first.")
+        return
+    print(post.groupby(["auction", "sale_date"]).size().rename("cars").reset_index().to_string(index=False))
+    write_postsale_workbook(con, post, args.excel)
+
+
+def write_postsale_workbook(con, cars: pd.DataFrame, excel: str | None) -> None:
+    """Market patterns tabs for all stored post-sales, plus pre-sale matching for the sales in `cars`."""
     tables = build_tables(store.load_postsales(con))
 
     # link each sale's sold cars back to its pre-sale list, where we have one
@@ -70,6 +85,7 @@ def cmd_postsale(args) -> None:
     finals = store.final_lists(pre_hist) if not pre_hist.empty else pre_hist
     linked = []
     for (name, date), sold in cars.groupby(["auction", "sale_date"]):
+        date = pd.Timestamp(date).date()
         pre = finals[(finals["auction"] == name) & (finals["sale_date"] == pd.Timestamp(date))] if len(finals) else finals
         if len(pre) == 0:
             continue
@@ -96,9 +112,9 @@ def cmd_postsale(args) -> None:
     if linked:
         tables["Matched to Pre-Sale"] = pd.concat(linked, ignore_index=True)
 
-    if args.excel:
-        write_workbook(tables, args.excel)
-        print(f"\nSaved {args.excel}")
+    if excel:
+        write_workbook(tables, excel)
+        print(f"\nSaved {excel}")
 
 
 def cmd_shortlist(args) -> None:
@@ -209,6 +225,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("folder", help="folder with the post-sale PDFs (e.g. manheim-pdf)")
     p.add_argument("--excel", help="save the market patterns workbook to this .xlsx file")
     p.set_defaults(func=cmd_postsale)
+
+    p = sub.add_parser("postsale-report", help="market patterns workbook from all stored post-sales")
+    p.add_argument("--excel", required=True, help="save the workbook to this .xlsx file")
+    p.set_defaults(func=cmd_postsale_report)
 
     p = sub.add_parser("shortlist", help="cars worth bidding on, with predicted hammer and max bid")
     p.add_argument("--sale", help="sale date YYYY-MM-DD (default: latest pre-sale)")

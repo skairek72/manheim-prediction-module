@@ -52,6 +52,7 @@ def actions(ask):
         ("3. Make SHORTLIST", lambda: db + ["shortlist", *crit, "--excel", report_path("shortlist")]),
         ("4. Import POST-SALE folder", lambda: (d := ask("folder")) and db + ["postsale", d, "--excel",
                                                                               report_path("market_patterns")]),
+        ("Post-sale workbook", lambda: db + ["postsale-report", "--excel", report_path("market_patterns")]),
         ("5. Scorecard (after post-sale)", lambda: (s := ask("date")) and db + ["scorecard", "--sale", s, *crit,
                                                                                 "--excel", report_path("scorecard")]),
         ("What's stored", lambda: db + ["history"]),
