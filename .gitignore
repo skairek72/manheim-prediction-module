@@ -5,3 +5,9 @@ __pycache__/
 .pytest_cache/
 # real exports stay local
 data/real/
+# the app's own data folder and built program
+my-data/
+*.exe
+dist/
+build/
+*.spec

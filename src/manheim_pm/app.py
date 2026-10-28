@@ -1,9 +1,11 @@
 """Windows window app: buttons for the weekly routine, no typing commands.
 
-Everything lives in Documents/Manheim Prediction:
-    manheim.db       history of every pre-sale and post-sale imported
-    criteria.toml    your buying rules (opened with Notepad from the app)
-    reports/         every Excel report the app makes
+Everything lives in one folder: a "my-data" folder next to ManheimPrediction.exe
+(or next to the code when run from source):
+    my-data/manheim.db       history of every pre-sale and post-sale imported
+    my-data/criteria.toml    your buying rules (opened with Notepad from the app)
+    my-data/reports/         every Excel report the app makes
+    my-data/presale/, my-data/postsale/   where to save the Manheim PDFs
 """
 import contextlib
 import io
@@ -23,8 +25,14 @@ APP_NAME = "Manheim Prediction"
 
 
 def home() -> Path:
-    base = Path(os.environ.get("USERPROFILE", Path.home())) / "Documents" / APP_NAME
-    (base / "reports").mkdir(parents=True, exist_ok=True)
+    if os.environ.get("MANHEIM_DATA"):  # tests
+        base = Path(os.environ["MANHEIM_DATA"])
+    elif getattr(sys, "frozen", False):  # the .exe: keep everything beside it
+        base = Path(sys.executable).resolve().parent / "my-data"
+    else:
+        base = Path(__file__).resolve().parents[2] / "my-data"
+    for sub in ("reports", "presale", "postsale"):
+        (base / sub).mkdir(parents=True, exist_ok=True)
     crit = base / "criteria.toml"
     if not crit.exists():
         shutil.copy(bundled("criteria.toml"), crit)
