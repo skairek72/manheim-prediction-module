@@ -1,0 +1,19 @@
+[project]
+name = "manheim-prediction-module"
+version = "0.1.0"
+description = "Analyze Manheim auction results: what's moving, what's trending, and sales pitches"
+requires-python = ">=3.10"
+dependencies = ["pandas>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
